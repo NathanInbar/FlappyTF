@@ -4,6 +4,8 @@ import math
 import random
 import numpy as np
 
+#comment
+
 pygame.init()
 #Constants
 WIDTH = 800
