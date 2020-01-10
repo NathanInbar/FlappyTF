@@ -5,7 +5,6 @@ import random
 import numpy as np
 
 pygame.init()
-#gitty
 #Constants
 WIDTH = 800
 HEIGHT = 600
