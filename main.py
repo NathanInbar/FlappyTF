@@ -1,5 +1,6 @@
 import pygame#handles the game part (flappy bird)
-import sys#handles System functions (exiting the pygame window)
+import sys, time#handles System functions (exiting the pygame window), math functions
+from math import sqrt
 from random import randint#handles random num generation in a range
 from apscheduler.schedulers.background import BackgroundScheduler# scheduler is used for pipe spawning
 import tensorflow as tf#handles Neural Network
@@ -31,6 +32,12 @@ sched.start()#initalizes pipe spawning
 birds = []#list that holds all the birds spawned
 pipes = []#list that holds all the pipes spawned
 
+#Neural Network inputs
+birdHeights = []#contains all birds height from the floor
+distToNextPipe = -1#contains the distance from all the birds to the next pipe
+nextPipeHeight = -1#initalize next pipe height input. doesnt need to be a list because next pipe height will be the same for all birds
+# - - - - - -
+
 class Bird: #class bird will define what a bird is
     def __init__(self): #called when Bird object is created
         self.pos = (100,150)#starting postition on the sreen
@@ -39,15 +46,16 @@ class Bird: #class bird will define what a bird is
         self.jump_force = 9#applied force when jump is pressed
         self.color = (200,200,5)#yellow
         self.rect = pygame.Rect(self.pos[0],self.pos[1],self.size,self.size)#initalize hitbox with given parameters
-
+        birdHeights.append(self.pos[1])#add bird's height from the floor when the game starts
     def update(self):#will run once per frame
 
         self.pos = (self.pos[0],self.pos[1] - self.v)  #changes position based on it's velocity.
+
         self.v += G #changes our velocity due to gravity 'G'
 
         #death - - -
         if (self.check_collision() == 1): # if bird is dead
-            print('bird dead')#print dead. Eventually will signal Neural Network that this bird has died.
+            pass# Eventually will signal Neural Network that this bird has died.
         # - - - -
 
         self.rect = pygame.Rect(self.pos[0],self.pos[1],self.size,self.size)#set its hitbox. must be set every frame
@@ -55,9 +63,6 @@ class Bird: #class bird will define what a bird is
 
     def render(self):#defines how this object will be visually represented
         pygame.draw.ellipse(screen,self.color,self.rect) #draw ellipse based on hitbox
-        #debug - - - - -
-        pygame.draw.line(screen,(255,255,255),(self.pos[0],self.pos[1]),(pipes[0].pos,pipes[0].gap_pos),1)#draw debug line to pipe-set center of pipe-set at first index of pipes[]
-        # - - - - - -
 
     def jump(self):#defines what happens when the bird jumps
         self.v = self.jump_force;#bird's velocity is set to force of jump
@@ -73,7 +78,6 @@ class Bird: #class bird will define what a bird is
         elif(self.rect.colliderect(pipes[0].bot_rect)):#bird has hit bottom pipe of first pipe-set in pipes[]
             return 1
         return 0 #if none of the above cases happened, return safe
-
 
 class Pipe:#each 'Pipe' is actually a pair of 2 pipes, one being the bottom and one being the top
     def __init__(self):#when a 'Pipe' object is created,
@@ -114,22 +118,46 @@ def update():#ran once a frame
                 birds[0].jump();#make first bird in list jump if user pressed space -- !! MUST BE DEPRECATED ONCE NEURAL NETWORK HANDLES BIRDS!!
 # - - - - - - - - - - - - - - - -
 #Bird/Bird's- - - - - - - - - - -
+    x=0#index
     for bird in birds:#for every bird,
         bird.update()#tell all birds to call their update function
+        birdHeights[x] = HEIGHT-bird.pos[1]#saves each birds height from the floor
+        x+=1#index increment
 # - - - - - - - - - - - - - - - -
 #Pipe/Pipe's- - - - - - - - - - -
+
     if(pipes[0].pos < -pipes[0].width):#if oldest pipe-set position is less than the opposite of it's width,
     # (ex: oldest pipe position=-81 (completely off screen),  negative pipe width=-80 then-> True)
         pipes.remove(pipes[0])#delete the pipe object
 
+    nextPipeHeight = pipes[0].gap_pos + pipes[0].gap/2#top point of bottom pipe
+    #we only need to get the distance from one bird to the next pipe since birds cannot move on the x axis.
+    distToNextPipe = (pipes[0].pos+pipes[0].width) - birds[0].pos[0]#set distance to next pipe equal to the pipe's x - bird's x. Except displace pipe's x by the width of the pipe so target position is at the end of the pipe, not the beginning
+
+    if(distToNextPipe < 0):#if the bird hits the end of the pipe,
+        distToNextPipe = pipes[1].pos - birds[0].pos[0]#set pipe target to the next pipe
+        nextPipeHeight = pipes[1].gap_pos + pipes[1].gap/2#nextPipeHeight = # top point of next bottom pipe
+        pipeTarget=1#used for debug lines
+    else: pipeTarget=0#used for debug lines
+
     for pipe in pipes:#for every pipe,
         pipe.update()#tell all pipes to call their update function
+
+    debug_lines(birds[0].pos[0], birds[0].pos[1], birds[0].pos[0], HEIGHT, 50, 0, 250)#shows bird height
+    debug_lines(pipes[pipeTarget].pos - 30 , pipes[pipeTarget].gap_pos + pipes[pipeTarget].gap/2, pipes[pipeTarget].pos + pipes[pipeTarget].width + 30, pipes[pipeTarget].gap_pos + pipes[pipeTarget].gap/2, 250, 0, 0)#shows height of next bottom pipe
+    debug_lines(birds[0].pos[0] , pipes[pipeTarget].gap_pos , pipes[pipeTarget].pos+pipes[pipeTarget].width , pipes[pipeTarget].gap_pos, 250, 0, 250)#shows distToNextPipe
+
 # - - - - - - - - - - - - - - - -
 
+#--end update
 
 pipes.append(Pipe())#start game with 1 pipe-set
 birds.append(Bird())#start game with 1 bird
 
+def debug_lines(x1,y1,x2,y2,c1,c2,c3):
+        #debug - - - - -
+        pygame.draw.line(screen,(c1,c2,c3),(x1,y1),(x2,y2))#draw debug line to pipe-set center of pipe-set at first index of pipes[]
+        # - - - - - -
 
 while True:#pauses between iterations by the delay (in ms). where the delay is fps/1000. (convert frames per SECOND to frames per MS)
     screen.fill(background_color)#draw background
