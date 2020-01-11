@@ -106,7 +106,6 @@ def pipe_spawner():#method that will be continuously called by a BackgroundSched
 
 sched.add_job(pipe_spawner,'interval',seconds = spawn_time)#tells scheduler to run pipe_spawner() every 'spawn_time' seconds
 
-
 def update():#ran once a frame
 #Pygame events- - - - - - - - - -
     for event in pygame.event.get():#for every event we told pygame to preform between updates (excluding draw requests),
