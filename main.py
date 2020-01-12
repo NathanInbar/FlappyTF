@@ -3,8 +3,10 @@ import sys, time#handles System functions (exiting the pygame window), math func
 from math import sqrt
 from random import randint#handles random num generation in a range
 from apscheduler.schedulers.background import BackgroundScheduler# scheduler is used for pipe spawning
-import tensorflow as tf#handles Neural Network
+from neuralNetwork import SkyNet
 #- - - - -
+#Make sure the compiler (Atom in my case) is loaded from the tensorflow environment, otherwise tensorflow module will not be found
+#ALSO: i flipped the coordinates for bird height, so the floor = 0, the cieling = 600. Not this way for the other things. I just think height matching the visual helps
 
 pygame.init()#initalizes the game
 
@@ -35,28 +37,39 @@ pipes = []#list that holds all the pipes spawned
 #Neural Network inputs
 birdHeights = []#contains all birds height from the floor
 distToNextPipe = -1#contains the distance from all the birds to the next pipe
-nextPipeHeight = -1#initalize next pipe height input. doesnt need to be a list because next pipe height will be the same for all birds
+nextBotPipeHeight = -1#initalize next pipe height input. doesnt need to be a list because next pipe height will be the same for all birds
+nextTopPipeHeight = -1#same as above except holds the top pipe's edge
+birdJumpBool = []#stores the outputs that the NN gives for each bird
+# - - - - - -
+#Neural Network Target:
+birdFitness = []#list of all birds fitness rating.
 # - - - - - -
 
 class Bird: #class bird will define what a bird is
+    global HEIGHT
     def __init__(self): #called when Bird object is created
-        self.pos = (100,150)#starting postition on the sreen
+        self.pos = (100,150)#starting postition on the screen
         self.v = 0#starting velocity
         self.size = 25#size of the bird (rendered as ellipse. size defines hitbox size which is rectangular)
         self.jump_force = 9#applied force when jump is pressed
         self.color = (200,200,5)#yellow
         self.rect = pygame.Rect(self.pos[0],self.pos[1],self.size,self.size)#initalize hitbox with given parameters
-        birdHeights.append(self.pos[1])#add bird's height from the floor when the game starts
+        self.height = self.pos[1]
+        self.fitness = 0
+        birdHeights.append(HEIGHT - self.height)#add bird's height from the floor when the game starts
+        birdFitness.append(self.fitness)#add fitness to list (starts at 0) when spawned
     def update(self):#will run once per frame
 
         self.pos = (self.pos[0],self.pos[1] - self.v)  #changes position based on it's velocity.
-
+        self.height = HEIGHT - self.pos[1]#updates its height to new position
         self.v += G #changes our velocity due to gravity 'G'
 
         #death - - -
         if (self.check_collision() == 1): # if bird is dead
             pass# Eventually will signal Neural Network that this bird has died.
-        # - - - -
+        # - - - - else: add fitness
+
+        self.fitness+=1
 
         self.rect = pygame.Rect(self.pos[0],self.pos[1],self.size,self.size)#set its hitbox. must be set every frame
         self.render()#calls render
@@ -114,13 +127,15 @@ def update():#ran once a frame
             sys.exit()
         if event.type == pygame.KEYDOWN:#if any key is pressed,
             if event.key == pygame.K_SPACE:#and that key is space,
-                birds[0].jump();#make first bird in list jump if user pressed space -- !! MUST BE DEPRECATED ONCE NEURAL NETWORK HANDLES BIRDS!!
+                for bird in birds:
+                    bird.jump();#make all birds in list jump if user pressed space -- !! MUST BE DEPRECATED ONCE NEURAL NETWORK HANDLES BIRDS !!
 # - - - - - - - - - - - - - - - -
 #Bird/Bird's- - - - - - - - - - -
     x=0#index
     for bird in birds:#for every bird,
         bird.update()#tell all birds to call their update function
-        birdHeights[x] = HEIGHT-bird.pos[1]#saves each birds height from the floor
+        birdHeights[x] = bird.height#saves each birds height from the floor
+        birdFitness[x] = bird.fitness#saves each birds fitness
         x+=1#index increment
 # - - - - - - - - - - - - - - - -
 #Pipe/Pipe's- - - - - - - - - - -
@@ -129,13 +144,16 @@ def update():#ran once a frame
     # (ex: oldest pipe position=-81 (completely off screen),  negative pipe width=-80 then-> True)
         pipes.remove(pipes[0])#delete the pipe object
 
-    nextPipeHeight = pipes[0].gap_pos + pipes[0].gap/2#top point of bottom pipe
+    nextBotPipeHeight = pipes[0].gap_pos + pipes[0].gap/2#top point of bottom pipe
+    nextTopPipeHeight = pipes[0].gap_pos - pipes[0].gap/2
     #we only need to get the distance from one bird to the next pipe since birds cannot move on the x axis.
     distToNextPipe = (pipes[0].pos+pipes[0].width) - birds[0].pos[0]#set distance to next pipe equal to the pipe's x - bird's x. Except displace pipe's x by the width of the pipe so target position is at the end of the pipe, not the beginning
 
     if(distToNextPipe < 0):#if the bird hits the end of the pipe,
         distToNextPipe = pipes[1].pos - birds[0].pos[0]#set pipe target to the next pipe
-        nextPipeHeight = pipes[1].gap_pos + pipes[1].gap/2#nextPipeHeight = # top point of next bottom pipe
+        nextBotPipeHeight = pipes[1].gap_pos + pipes[1].gap/2#nextBotPipeHeight = # top point of next bottom pipe
+        nextBotPipeHeight = pipes[1].gap_pos - pipes[1].gap/2#nextBotPipeHeight = # top point of next bottom pipe
+
         pipeTarget=1#used for debug lines
     else: pipeTarget=0#used for debug lines
 
@@ -144,14 +162,17 @@ def update():#ran once a frame
 
     debug_lines(birds[0].pos[0], birds[0].pos[1], birds[0].pos[0], HEIGHT, 50, 0, 250)#shows bird height
     debug_lines(pipes[pipeTarget].pos - 30 , pipes[pipeTarget].gap_pos + pipes[pipeTarget].gap/2, pipes[pipeTarget].pos + pipes[pipeTarget].width + 30, pipes[pipeTarget].gap_pos + pipes[pipeTarget].gap/2, 250, 0, 0)#shows height of next bottom pipe
-    debug_lines(birds[0].pos[0] , pipes[pipeTarget].gap_pos , pipes[pipeTarget].pos+pipes[pipeTarget].width , pipes[pipeTarget].gap_pos, 250, 0, 250)#shows distToNextPipe
-
+    debug_lines(pipes[pipeTarget].pos - 30 , pipes[pipeTarget].gap_pos - pipes[pipeTarget].gap/2, pipes[pipeTarget].pos + pipes[pipeTarget].width + 30, pipes[pipeTarget].gap_pos - pipes[pipeTarget].gap/2, 250, 0, 0)#shows height of next bottom pipe
+    debug_lines(birds[0].pos[0] , pipes[pipeTarget].gap_pos , pipes[pipeTarget].pos+pipes[pipeTarget].width , pipes[pipeTarget].gap_pos, 250, 0, 250)#shows distToNextBotPipe
+    #print(birdFitness)
 # - - - - - - - - - - - - - - - -
 
 #--end update
 
 pipes.append(Pipe())#start game with 1 pipe-set
 birds.append(Bird())#start game with 1 bird
+
+SkyNet(birdHeights, distToNextPipe, nextTopPipeHeight, nextBotPipeHeight, birdFitness)
 
 def debug_lines(x1,y1,x2,y2,c1,c2,c3):
         #debug - - - - -
