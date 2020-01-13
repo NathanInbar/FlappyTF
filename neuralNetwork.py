@@ -1,81 +1,42 @@
-# -----------------------TENSORS:
-#Tensors are vectors. The rank of the tensor directly correlates with the dimensions of the vector.
-#Example 1: Observe Ray 'A' on a cartesian coordinate plane (x,y,z)
-#
-#   |     ^
-#   |    / A
-#  y|   /
-#   |  /
-#   | /
-#   |/___________________________
-#               x
-#
-# Ray A can be expressed by giving it's x and y components.
-# (Since it's on a 2D plane, z = 0)
-#
-#   |     ^
-#   |    /A]5
-#  y|   /  ]4
-#   |  /   ]3
-#   | /    ]2
-#   |/_____]1_____________________
-#    1  2  3        x
-#
-#   now you can see that Ray 'A' is 3 unit vectors in the x axis
-#       and 5 unit vectors in the y axis
-#
-# Therefore, Ray 'A' = {Ax, Ay, Az}
-#                    = {3, 5, 0}
-#
-#Rank 2:
-#
-# An example of a Rank 2 Tensor in the real world could be:
-#
-# Say you have a cube, and you want to do some measurements on force affecting the cube.
-#   Now we'll only look at 1 face of the cube (side view):
-#   []
-#   [] ----> this arrow represents the surfaces direction in respect to the cartesian coordinate system
-#   []       therefore this arrow can have the components (x,y,z)
-#   []
-#   [] ----> this arrow represents the direction of the force affecting this face in respect to the cartesian coordinate system.
-#   []      therefore this arrow can also have the components (x,y,z)
-#
-# This is how the example can be represented.
-# the first component represents direction of the face
-# the second component represents direction of the force applied to the face.
-#       Tensor N = {Nxx,Nxy,Nxz}
-#                  {Nyx,Nyy,Nyz}
-#                  {Nzx,Nzy,Nzz}
-# ---------------------------------------------------------------------------------------------------------------------
-#boom. class dismissed.
+
 
 #NN packages
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import *
 from tensorflow.keras.utils import plot_model
+import numpy as np
 
-
-def SkyNet(input1, input2, input3, input4, target):#args = inputs
+class SkyNet:#args = inputs
     #In Keras, the input layer itself is NOT a layer, but a tensor.
     #It's the starting tensor you send to the first hidden layer.
     #This tensor must have the same 'shape' as the training data.
+    def __init__(self):
+        self.input1 = -1
+        self.input2 = -1
+        self.input3 = -1
+        self.input4 = -1
+        #since we only have 4 inputs, the tensor for input will look like (named tensor I): {Ia,Ib,Ic,Id}
+        self.inpTensor = np.atleast_2d(np.asarray([self.input1, self.input2, self.input3, self.input4]))
+                         #Tensor I = ( Ia   ,   Ib  ,   Ic  ,   Id  )
+        self.model = Sequential()
 
-    #since we only have 4 inputs, the tensor for input will look like (named tensor I): {Ia,Ib,Ic,Id}
-    inpTensor = (input1, input2, input3, input4)
-    #Tensor I = ( Ia   ,   Ib  ,   Ic  ,   Id  )
+        #start from the first hidden layer, since the input is not actually a layer...
+        #...but inform the shape (shape=how many) of the input, with 4 elements.
+        #comma neccesary when your inputs are 1 dimensional, because 'input_shape' takes in a Tuple
+        #
+        #create layer which will: take in 4 inputs, pass them through an activation function, then give it to this layer:
+        hiddenLayer1 = Dense(units = 5, activation = 'relu',input_shape = (4,) )#1st hidden layer of 5 nodes
+        #
+        hiddenLayer2 = Dense(units=5, activation = 'relu')#2nd hidden layer of 5 nodes.
+        outputLayer = Dense(units=1, activation = 'sigmoid')#layer that contains the output. (number 0.0 to 1.0)
 
-    NN_target = target #target = what the NN should look at to judge success
+        #adds hidden layers to model sequentially
+        self.model.add(hiddenLayer1)
+        self.model.add(hiddenLayer2)
+        self.model.add(outputLayer)
+        #layers will look like: 4 -> 5 -> 5 -> 1
+    
+        self.model.compile(loss='mse', optimizer='adam',metrics=['accuracy'])
 
-    model = Sequential()
-
-    #start from the first hidden layer, since the input is not actually a layer
-    #but inform the shape of the input, with 4 elements.
-    #comma neccesary when your input is 1D, beacuse input_shape takes in a Tuple
-    model.add(Dense(units = 5, activation = 'relu',input_shape = (4,) )) #hidden layer 1
-    model.add(Dense(units=5)) #hidden layer 2
-    model.add(Dense(units=1)) #output layer
-
-    #layers will look like: 4 -> 5 -> 5 -> 1
-
-    #plot_model(model, to_file='NN_model.png')#creates a graphic visualization of the network
-    print('done')
+        plot_model(self.model,show_shapes=True, show_layer_names=True, to_file='NN_model.png')#creates a graphic visualization of the network
+        print('created SkyNet . . .')
